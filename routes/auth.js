@@ -33,7 +33,7 @@ router.post('/register', async ( req, res) => {
 
     } catch (err){
         console.error(err.message);
-        res.status(500).send('Server Error');
+        res.status(500).json({ message: 'Server Error: ' + err.message });
     }
 
 });
@@ -73,7 +73,7 @@ router.post('/login', async (req, res) => {
 
     } catch (err){
         console.error(err.message)
-        res.status(500).send('Server Error')
+        res.status(500).json({ message: 'Server Error: ' + err.message });
     }
 
 });
@@ -84,7 +84,7 @@ router.get('/me', auth, async (req, res) => {
         res.json(user);
 
     } catch (err){
-        res.status(500).send('Server Error')
+        res.status(500).json({ message: 'Server Error: ' + err.message });
     }
 });
 
