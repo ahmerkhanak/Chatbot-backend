@@ -13,6 +13,12 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
+
+// Root route to check if backend is running (fixes "Cannot GET /" on Vercel)
+app.get('/', (req, res) => {
+    res.send('AI Chatbot Backend is running perfectly!');
+});
+
 app.use('/api/auth', authRoutes);
 
 // Database Connection Logic (Serverless optimized)
