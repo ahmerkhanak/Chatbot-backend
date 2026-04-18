@@ -6,27 +6,35 @@ const Message = require('./models/Message');
 const Chat = require('./models/Chat');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const authRoutes = require('./routes/auth');
-const mongoose = require('mongoose')
+const mongoose = require('mongoose');
 
 dotenv.config();
 const app = express();
+
 app.use(cors());
 app.use(express.json());
 app.use('/api/auth', authRoutes);
 
-mongoose.connect(process.env.MONGO_URI)
-    .then(function(){
+// Database Connection Logic (Serverless optimized)
+let isConnected = false;
+const connectDB = async () => {
+    if (isConnected) return;
+    try {
+        const db = await mongoose.connect(process.env.MONGO_URI);
+        isConnected = db.connections[0].readyState;
         console.log('Database Connected Successfully');
-    })
-    .catch(function(err){
+    } catch (err) {
         console.error('DataBase wasnt connected', err.message);
-        process.exit(1);
-    });
+        // In serverless, we don't necessarily want to process.exit(1) 
+        // as it kills the instance. We let the request fail instead.
+    }
+};
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
 app.post('/chat', auth, async (req, res) => {
+    await connectDB(); // Ensure DB is connected before query
     try {
         let { message, chatId } = req.body;
 
@@ -43,19 +51,19 @@ app.post('/chat', auth, async (req, res) => {
             chatId = newChat._id;
         }
 
-        const userMsg = new Message ({
+        const userMsg = new Message({
             chatId,
             userId,
-            role : 'user',
+            role: 'user',
             text: message
         });
         await userMsg.save();
 
         const result = await model.generateContent(message);
         const text = result.response.text();
-        const botMsg = new Message ({
+        const botMsg = new Message({
             chatId,
-            userId, 
+            userId,
             role: 'bot',
             text: text
         });
@@ -65,12 +73,13 @@ app.post('/chat', auth, async (req, res) => {
         res.json({ reply: text, chatId });
 
     } catch (error) {
-        console.error('Failed', error)
+        console.error('Failed', error);
         res.status(500).json({ error: "The AI is having a moment, try again later" });
     }
 });
 
 app.get('/api/chats', auth, async (req, res) => {
+    await connectDB();
     try {
         const chats = await Chat.find({ userId: req.user.id }).sort({ updatedAt: -1 });
         res.json(chats);
@@ -81,6 +90,7 @@ app.get('/api/chats', auth, async (req, res) => {
 });
 
 app.get('/api/chats/:chatId/messages', auth, async (req, res) => {
+    await connectDB();
     try {
         const chat = await Chat.findOne({ _id: req.params.chatId, userId: req.user.id });
         if (!chat) return res.status(404).json({ error: "Chat not found" });
@@ -93,8 +103,14 @@ app.get('/api/chats/:chatId/messages', auth, async (req, res) => {
     }
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-    console.log(`Server is listening at ${PORT}`)
-});
+// IMPORTANT: Keep the listener for local development, 
+// but Vercel uses the exported 'app'.
+if (process.env.NODE_ENV !== 'production') {
+    const PORT = process.env.PORT || 5000;
+    app.listen(PORT, () => {
+        console.log(`Server is listening at ${PORT}`);
+    });
+}
 
+// Export the app
+module.exports = app;
