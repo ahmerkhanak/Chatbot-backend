@@ -19,8 +19,6 @@ app.get('/', (req, res) => {
     res.send('AI Chatbot Backend is running perfectly!');
 });
 
-app.use('/api/auth', authRoutes);
-
 // Database Connection Logic (Serverless optimized)
 let isConnected = false;
 const connectDB = async () => {
@@ -31,16 +29,21 @@ const connectDB = async () => {
         console.log('Database Connected Successfully');
     } catch (err) {
         console.error('DataBase wasnt connected', err.message);
-        // In serverless, we don't necessarily want to process.exit(1) 
-        // as it kills the instance. We let the request fail instead.
     }
 };
+
+// Global DB Connection middleware for all routes
+app.use(async (req, res, next) => {
+    await connectDB();
+    next();
+});
+
+app.use('/api/auth', authRoutes);
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
 app.post('/chat', auth, async (req, res) => {
-    await connectDB(); // Ensure DB is connected before query
     try {
         let { message, chatId } = req.body;
 
