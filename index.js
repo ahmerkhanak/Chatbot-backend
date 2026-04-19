@@ -28,9 +28,12 @@ const connectDB = async () => {
         isConnected = db.connections[0].readyState;
         console.log('Database Connected Successfully');
     } catch (err) {
-        console.error('DataBase wasnt connected', err.message);
+        console.error('Database Connection Error:', err.message);
     }
 };
+
+// Initial connection for local startup
+connectDB();
 
 // Global DB Connection middleware for all routes
 app.use(async (req, res, next) => {
@@ -82,7 +85,7 @@ app.post('/chat', auth, async (req, res) => {
         res.json({ reply: text, chatId });
 
     } catch (error) {
-        console.error('Failed', error);
+        console.error('Chat Error:', error);
         res.status(500).json({ error: "The AI is having a moment, try again later" });
     }
 });
@@ -109,6 +112,25 @@ app.get('/api/chats/:chatId/messages', auth, async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: "Server error" });
+    }
+});
+
+app.delete('/api/chats/:chatId', auth, async (req, res) => {
+    await connectDB();
+    try {
+        const chat = await Chat.findOne({ _id: req.params.chatId, userId: req.user.id });
+        if (!chat) return res.status(404).json({ error: "Chat not found or unauthorized" });
+
+        // Delete all messages in the chat
+        await Message.deleteMany({ chatId: chat._id });
+        
+        // Delete the chat itself
+        await Chat.findByIdAndDelete(chat._id);
+
+        res.json({ message: "Chat deleted successfully" });
+    } catch (error) {
+        console.error('Delete Error:', error);
+        res.status(500).json({ error: "Failed to delete chat" });
     }
 });
 
